@@ -2,9 +2,7 @@
 <html lang="fi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
-
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
 <title>Tikku-ukkopeli</title>
 
 <style>
@@ -17,14 +15,11 @@ html, body {
   overflow: hidden;
   touch-action: none;
 }
-
 canvas {
   display: block;
   margin: auto;
   background: #222;
 }
-
-/* Käännä näyttö -kehotus */
 .rotate-warning {
   position: fixed;
   inset: 0;
@@ -34,32 +29,31 @@ canvas {
   align-items: center;
   justify-content: center;
   font-size: 26px;
-  text-align: center;
   z-index: 999;
 }
-
 @media (orientation: portrait) {
   canvas { display: none; }
   .rotate-warning { display: flex; }
 }
-
-/* mobiilinäppäimet */
 .controls {
   position: fixed;
   bottom: 10px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
-
 .controls.left { left: 10px; }
 .controls.right { right: 10px; }
-
+.row {
+  display: flex;
+  gap: 8px;
+}
 .button {
   width: 70px;
   height: 70px;
-  background: rgba(255,255,255,0.15);
-  border: 2px solid white;
   border-radius: 50%;
+  border: 2px solid white;
+  background: rgba(255,255,255,0.15);
   color: white;
   font-size: 14px;
 }
@@ -68,33 +62,42 @@ canvas {
 
 <body>
 
-<div class="rotate-warning">
-  Käännä puhelin vaaka-asentoon 📱↔️
-</div>
-
+<div class="rotate-warning">Käännä puhelin vaaka-asentoon 📱↔️</div>
 <canvas id="game"></canvas>
 
 <!-- Pelaaja 1 -->
 <div class="controls left">
-  <button class="button" id="p1Left">←</button>
-  <button class="button" id="p1Right">→</button>
-  <button class="button" id="p1Hit">Isku</button>
-  <button class="button" id="p1Block">Torj.</button>
+  <button class="button" id="p1Jump">Hyppy</button>
+  <div class="row">
+    <button class="button" id="p1Left">←</button>
+    <button class="button" id="p1Right">→</button>
+  </div>
+  <div class="row">
+    <button class="button" id="p1Hit">Isku</button>
+    <button class="button" id="p1Block">Torj.</button>
+  </div>
 </div>
 
 <!-- Pelaaja 2 -->
 <div class="controls right">
-  <button class="button" id="p2Left">←</button>
-  <button class="button" id="p2Right">→</button>
-  <button class="button" id="p2Hit">Isku</button>
-  <button class="button" id="p2Block">Torj.</button>
+  <button class="button" id="p2Jump">Hyppy</button>
+  <div class="row">
+    <button class="button" id="p2Left">←</button>
+    <button class="button" id="p2Right">→</button>
+  </div>
+  <div class="row">
+    <button class="button" id="p2Hit">Isku</button>
+    <button class="button" id="p2Block">Torj.</button>
+  </div>
 </div>
 
 <script>
-/* ===== KIINTEÄ RESOLUUTIO ===== */
+/* ===== PELIN ASETUKSET ===== */
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
+const MAX_HITS = 20;
 
+/* ===== CANVAS ===== */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -114,52 +117,74 @@ resize();
 function createPlayer(x, color) {
   return {
     x,
-    y: GAME_HEIGHT - 150,
+    y: GAME_HEIGHT - 200,
     vx: 0,
-    width: 40,
-    height: 100,
+    vy: 0,
+    scale: 2,
     color,
-    health: 100,
+    hitsTaken: 0,
     isHitting: false,
-    isBlocking: false,
     hitTimer: 0,
-    blockTimer: 0
+    isBlocking: false,
+    blockTimer: 0,
+    onGround: true
   };
 }
 
-const p1 = createPlayer(300, "lime");
-const p2 = createPlayer(900, "cyan");
+let p1 = createPlayer(350, "lime");
+let p2 = createPlayer(930, "cyan");
+let roundOver = false;
+let roundTextTimer = 0;
 
 /* ===== OHJAUS ===== */
-function bind(btn, down, up) {
+function bind(btn, down) {
   btn.addEventListener("touchstart", e => { e.preventDefault(); down(); });
-  btn.addEventListener("touchend", e => { e.preventDefault(); up(); });
 }
 
-bind(p1Left, () => p1.vx = -5, () => p1.vx = 0);
-bind(p1Right, () => p1.vx = 5, () => p1.vx = 0);
-bind(p2Left, () => p2.vx = -5, () => p2.vx = 0);
-bind(p2Right, () => p2.vx = 5, () => p2.vx = 0);
+bind(p1Left, () => p1.vx = -6);
+bind(p1Right, () => p1.vx = 6);
+bind(p2Left, () => p2.vx = -6);
+bind(p2Right, () => p2.vx = 6);
 
-bind(p1Hit, () => hit(p1), () => {});
-bind(p2Hit, () => hit(p2), () => {});
-bind(p1Block, () => block(p1), () => {});
-bind(p2Block, () => block(p2), () => {});
+bind(p1Jump, () => jump(p1));
+bind(p2Jump, () => jump(p2));
+bind(p1Hit, () => hit(p1));
+bind(p2Hit, () => hit(p2));
+bind(p1Block, () => block(p1));
+bind(p2Block, () => block(p2));
 
-/* ===== LOGIIKKA ===== */
+document.addEventListener("touchend", () => {
+  p1.vx = 0;
+  p2.vx = 0;
+});
+
+/* ===== TOIMINNOT ===== */
+function jump(p) {
+  if (p.onGround) {
+    p.vy = -18;
+    p.onGround = false;
+  }
+}
 function hit(p) {
   p.isHitting = true;
-  p.hitTimer = 20;
+  p.hitTimer = 8; // lyhyempi osumaikkuna
 }
-
 function block(p) {
   p.isBlocking = true;
-  p.blockTimer = 30;
+  p.blockTimer = 120; // 2 sekuntia (60fps)
 }
 
+/* ===== PÄIVITYS ===== */
 function updatePlayer(p) {
   p.x += p.vx;
-  p.x = Math.max(0, Math.min(GAME_WIDTH, p.x));
+  p.y += p.vy;
+  p.vy += 1.1;
+
+  if (p.y >= GAME_HEIGHT - 200) {
+    p.y = GAME_HEIGHT - 200;
+    p.vy = 0;
+    p.onGround = true;
+  }
 
   if (p.hitTimer > 0) p.hitTimer--;
   else p.isHitting = false;
@@ -168,80 +193,104 @@ function updatePlayer(p) {
   else p.isBlocking = false;
 }
 
-/* ===== TÖRMÄYS & ISKU ===== */
-function checkHit(attacker, defender) {
-  if (!attacker.isHitting) return;
-
-  const dist = Math.abs(attacker.x - defender.x);
-  if (dist < 80) {
-    if (!defender.isBlocking) {
-      defender.health -= 1;
-      hitEffect(defender.x, defender.y);
+/* ===== ISKUT ===== */
+let hitFX = [];
+function checkHit(a, d) {
+  if (!a.isHitting || roundOver) return;
+  if (Math.abs(a.x - d.x) < 90) {
+    if (!d.isBlocking) {
+      d.hitsTaken++;
+      hitFX.push({x:d.x,y:d.y,r:20});
+      if (d.hitsTaken >= MAX_HITS) endRound();
     }
   }
 }
 
-/* ===== ISKUANIMAATIO ===== */
-let hitFX = [];
-
-function hitEffect(x, y) {
-  hitFX.push({ x, y, r: 10 });
+/* ===== ERÄ ===== */
+function endRound() {
+  roundOver = true;
+  roundTextTimer = 120;
+}
+function resetRound() {
+  p1 = createPlayer(350, "lime");
+  p2 = createPlayer(930, "cyan");
+  roundOver = false;
 }
 
-function drawHitFX() {
+/* ===== PIIRTO ===== */
+function drawPlayer(p) {
+  const s = p.scale;
+  ctx.strokeStyle = p.isBlocking ? "yellow" : p.color;
+  ctx.lineWidth = 4;
+
+  // vartalo
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y - 80*s);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+
+  // kädet
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y - 50*s);
+  ctx.lineTo(p.x + (p.isHitting ? 60*s : 30*s), p.y - 50*s);
+  ctx.stroke();
+
+  // jalat
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x - 25*s, p.y + 50*s);
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 25*s, p.y + 50*s);
+  ctx.stroke();
+}
+
+function drawFX() {
   hitFX.forEach(fx => {
     ctx.strokeStyle = "red";
     ctx.beginPath();
-    ctx.arc(fx.x, fx.y - 50, fx.r, 0, Math.PI * 2);
+    ctx.arc(fx.x, fx.y - 80, fx.r, 0, Math.PI*2);
     ctx.stroke();
     fx.r += 3;
   });
   hitFX = hitFX.filter(fx => fx.r < 60);
 }
 
-/* ===== PIIRTO ===== */
-function drawPlayer(p) {
-  ctx.strokeStyle = p.color;
-  ctx.lineWidth = 4;
-
-  // vartalo
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y - 80);
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-
-  // kädet
-  ctx.beginPath();
-  ctx.moveTo(p.x - 30, p.y - 50);
-  ctx.lineTo(p.x + (p.isHitting ? 50 : 30), p.y - 50);
-  ctx.stroke();
-}
-
 function drawHUD() {
   ctx.fillStyle = "red";
-  ctx.fillRect(50, 30, p1.health * 2, 20);
-  ctx.fillRect(GAME_WIDTH - 50 - p2.health * 2, 30, p2.health * 2, 20);
+  ctx.fillRect(50,30,(MAX_HITS-p1.hitsTaken)*15,20);
+  ctx.fillRect(GAME_WIDTH-50-(MAX_HITS-p2.hitsTaken)*15,30,(MAX_HITS-p2.hitsTaken)*15,20);
 }
 
+/* ===== LOOP ===== */
 function loop() {
-  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  ctx.clearRect(0,0,GAME_WIDTH,GAME_HEIGHT);
 
-  updatePlayer(p1);
-  updatePlayer(p2);
-
-  checkHit(p1, p2);
-  checkHit(p2, p1);
+  if (!roundOver) {
+    updatePlayer(p1);
+    updatePlayer(p2);
+    checkHit(p1,p2);
+    checkHit(p2,p1);
+  } else {
+    roundTextTimer--;
+    if (roundTextTimer <= 0) resetRound();
+  }
 
   drawPlayer(p1);
   drawPlayer(p2);
-  drawHitFX();
+  drawFX();
   drawHUD();
+
+  if (roundOver) {
+    ctx.fillStyle = "white";
+    ctx.font = "60px Arial";
+    ctx.fillText("UUSI ERÄ", GAME_WIDTH/2-150, GAME_HEIGHT/2);
+  }
 
   requestAnimationFrame(loop);
 }
 
 loop();
 </script>
-
 </body>
 </html>
+
