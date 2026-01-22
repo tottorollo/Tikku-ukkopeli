@@ -24,7 +24,7 @@ html,body{
   background:black;
   color:white;
   font-size:32px;
-  z-index:10;
+  z-index:20;
 }
 
 #topbar{
@@ -38,28 +38,38 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:center;
-  z-index:5;
+  z-index:10;
 }
 
 #topbar button{
   font-size:18px;
-  padding:6px 14px;
+  padding:6px 16px;
+}
+
+#gameWrap{
+  position:absolute;
+  top:50px;
+  left:0;
+  right:0;
+  bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
 
 canvas{
-  display:block;
-  margin:auto;
   background:#222;
+  image-rendering:pixelated;
 }
 
 .controls{
   position:fixed;
   bottom:20px;
+  width:180px;
   display:flex;
   flex-wrap:wrap;
-  width:180px;
   gap:10px;
-  z-index:5;
+  z-index:15;
 }
 
 .left{ left:20px; }
@@ -71,11 +81,11 @@ canvas{
   border-radius:50%;
   border:3px solid white;
   color:white;
+  background:#444;
   display:flex;
   align-items:center;
   justify-content:center;
   font-size:16px;
-  background:#444;
   user-select:none;
 }
 </style>
@@ -89,9 +99,11 @@ canvas{
   <button id="modeBtn">Yksinpeli</button>
 </div>
 
-<canvas id="c"></canvas>
+<div id="gameWrap">
+  <canvas id="c" width="1280" height="600"></canvas>
+</div>
 
-<div class="controls left" id="p1c">
+<div class="controls left">
   <div class="btn" id="p1Jump">Hyppy</div>
   <div class="btn" id="p1L">←</div>
   <div class="btn" id="p1R">→</div>
@@ -108,29 +120,37 @@ canvas{
 </div>
 
 <script>
-const c=document.getElementById("c"),x=c.getContext("2d");
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
 const W=1280,H=600;
-c.width=W; c.height=H;
 
-const rotate=document.getElementById("rotate");
-function checkOrientation(){
-  rotate.style.display=innerHeight>innerWidth?"flex":"none";
+function scaleCanvas(){
+  const scale=Math.min(
+    innerWidth/W,
+    (innerHeight-50)/H
+  );
+  canvas.style.transform=`scale(${scale})`;
 }
-onresize=checkOrientation; checkOrientation();
+onresize=()=>{
+  document.getElementById("rotate").style.display=
+    innerHeight>innerWidth?"flex":"none";
+  scaleCanvas();
+};
+onresize();
 
-let singlePlayer=true;
+let single=true;
 const modeBtn=document.getElementById("modeBtn");
 const p2c=document.getElementById("p2c");
 
 modeBtn.onclick=()=>{
-  singlePlayer=!singlePlayer;
-  modeBtn.textContent=singlePlayer?"Yksinpeli":"Kaksinpeli";
-  p2c.style.display=singlePlayer?"none":"flex";
+  single=!single;
+  modeBtn.textContent=single?"Yksinpeli":"Kaksinpeli";
+  p2c.style.display=single?"none":"flex";
 };
 
-function fighter(xpos,color){
+function fighter(x,color){
   return{
-    x:xpos,y:420,vx:0,vy:0,
+    x,y:420,vx:0,vy:0,
     dir:1,
     hp:20,
     hit:0,block:0,blockCD:0,flash:0,
@@ -140,123 +160,120 @@ function fighter(xpos,color){
 
 let p1=fighter(350,"lime");
 let p2=fighter(930,"cyan");
-let over=false, timer=0;
+let over=false,timer=0;
 
 function draw(p,o){
   const s=2;
-  const fx=p.x, fy=p.y;
-
-  // suunta vastustajaan
   p.dir=o.x>p.x?1:-1;
-
-  x.strokeStyle=p.flash?"red":p.c;
-  x.lineWidth=4;
+  ctx.strokeStyle=p.flash?"red":p.c;
+  ctx.lineWidth=4;
 
   // pää
-  x.beginPath();
-  x.arc(fx,fy-120*s,15*s,0,Math.PI*2); x.stroke();
+  ctx.beginPath();
+  ctx.arc(p.x,p.y-240,30,0,Math.PI*2);
+  ctx.stroke();
 
   // vartalo
-  x.beginPath();
-  x.moveTo(fx,fy-105*s);
-  x.lineTo(fx,fy-60*s); x.stroke();
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y-210);
+  ctx.lineTo(p.x,p.y-120);
+  ctx.stroke();
 
   // jalat
-  x.beginPath();
-  x.moveTo(fx,fy-60*s);
-  x.lineTo(fx-20*s,fy); x.stroke();
-  x.beginPath();
-  x.moveTo(fx,fy-60*s);
-  x.lineTo(fx+20*s,fy); x.stroke();
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y-120);
+  ctx.lineTo(p.x-40,p.y);
+  ctx.moveTo(p.x,p.y-120);
+  ctx.lineTo(p.x+40,p.y);
+  ctx.stroke();
 
   // käsi
-  x.beginPath();
-  x.moveTo(fx,fy-95*s);
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y-190);
   if(p.block){
-    x.lineTo(fx+25*p.dir*s,fy-120*s);
+    ctx.lineTo(p.x+60*p.dir,p.y-240);
   }else if(p.hit){
-    x.lineTo(fx+45*p.dir*s,fy-95*s);
+    ctx.lineTo(p.x+90*p.dir,p.y-190);
   }else{
-    x.lineTo(fx+30*p.dir*s,fy-95*s);
+    ctx.lineTo(p.x+60*p.dir,p.y-190);
   }
-  x.stroke();
+  ctx.stroke();
 }
 
 function update(p){
   p.x+=p.vx;
   p.y+=p.vy;
   p.vy+=1.2;
-
-  if(p.y>420){ p.y=420; p.vy=0; }
-
+  if(p.y>420){p.y=420;p.vy=0;}
   p.vx*=0.8;
-  if(p.hit) p.hit--;
+  if(p.hit)p.hit--;
   if(p.block){
-    if(--p.block<=0) p.blockCD=60;
-  }else if(p.blockCD>0) p.blockCD--;
-  if(p.flash) p.flash--;
+    if(--p.block<=0)p.blockCD=60;
+  }else if(p.blockCD>0)p.blockCD--;
+  if(p.flash)p.flash--;
 }
 
 function hit(a,b){
-  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<80){
+  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<120){
     b.hp--;
     b.flash=8;
-    if(b.hp<=0){ over=true; timer=120; }
+    if(b.hp<=0){over=true;timer=120;}
   }
 }
 
 function ai(){
-  if(p2.block||p2.hit) return;
-  if(Math.random()<0.02) p2.vx=(p1.x>p2.x?1:-1)*6;
-  if(Math.random()<0.01) p2.hit=10;
-  if(Math.random()<0.01) p2.block=60;
+  if(p2.block||p2.hit)return;
+  if(Math.random()<0.03)p2.vx=(p1.x>p2.x?1:-1)*6;
+  if(Math.random()<0.015)p2.hit=10;
+  if(Math.random()<0.01)p2.block=60;
 }
 
 function loop(){
-  x.clearRect(0,0,W,H);
+  ctx.clearRect(0,0,W,H);
 
   if(!over){
-    update(p1); update(p2);
-    if(singlePlayer) ai();
-    hit(p1,p2); hit(p2,p1);
+    update(p1);update(p2);
+    if(single)ai();
+    hit(p1,p2);hit(p2,p1);
   }else if(--timer<=0){
     p1=fighter(350,"lime");
     p2=fighter(930,"cyan");
     over=false;
   }
 
-  draw(p1,p2); draw(p2,p1);
+  draw(p1,p2);draw(p2,p1);
 
-  x.fillStyle="white";
-  x.font="20px Arial";
-  x.fillText("P1: "+p1.hp,20,80);
-  x.fillText("P2: "+p2.hp,W-120,80);
+  ctx.fillStyle="white";
+  ctx.font="20px Arial";
+  ctx.fillText("P1: "+p1.hp,20,40);
+  ctx.fillText("P2: "+p2.hp,W-120,40);
 
   if(over){
-    x.font="50px Arial";
-    x.fillText("UUSI ERÄ",W/2-120,H/2);
+    ctx.font="50px Arial";
+    ctx.fillText("UUSI ERÄ",W/2-120,H/2);
   }
 
   requestAnimationFrame(loop);
 }
 loop();
 
-function bind(btn,fn){
-  btn.ontouchstart=e=>{e.preventDefault();fn();};
+function bind(id,fn){
+  document.getElementById(id).ontouchstart=e=>{
+    e.preventDefault();fn();
+  };
 }
-bind(p1L,()=>p1.vx=-8);
-bind(p1R,()=>p1.vx=8);
-bind(p1Jump,()=>{if(p1.vy==0)p1.vy=-20});
-bind(p1Hit,()=>{if(!p1.block)p1.hit=10});
-bind(p1Block,()=>{if(!p1.hit&&!p1.blockCD)p1.block=60});
 
-bind(p2L,()=>p2.vx=-8);
-bind(p2R,()=>p2.vx=8);
-bind(p2Jump,()=>{if(p2.vy==0)p2.vy=-20});
-bind(p2Hit,()=>{if(!p2.block)p2.hit=10});
-bind(p2Block,()=>{if(!p2.hit&&!p2.blockCD)p2.block=60});
+bind("p1L",()=>p1.vx=-8);
+bind("p1R",()=>p1.vx=8);
+bind("p1Jump",()=>{if(p1.vy===0)p1.vy=-20});
+bind("p1Hit",()=>{if(!p1.block)p1.hit=10});
+bind("p1Block",()=>{if(!p1.hit&&!p1.blockCD)p1.block=60});
 
-document.addEventListener("touchstart",()=>{}, {passive:false});
+bind("p2L",()=>p2.vx=-8);
+bind("p2R",()=>p2.vx=8);
+bind("p2Jump",()=>{if(p2.vy===0)p2.vy=-20});
+bind("p2Hit",()=>{if(!p2.block)p2.hit=10});
+bind("p2Block",()=>{if(!p2.hit&&!p2.blockCD)p2.block=60});
 </script>
 </body>
 </html>
