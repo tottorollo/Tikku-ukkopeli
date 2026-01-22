@@ -2,6 +2,7 @@
 <html lang="fi">
 <head>
 <meta charset="UTF-8">
+<title>Tikku-ukkopeli</title>
 
 <meta name="viewport" content="
   width=device-width,
@@ -9,304 +10,260 @@
   maximum-scale=1.0,
   user-scalable=no
 ">
-
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Tikku-ukkopeli">
-
-<title>Tikku-ukkopeli</title>
 
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  background:black;
-  overflow:hidden;
-  touch-action:none;
-  overscroll-behavior:none;
-  -webkit-user-select:none;
-  user-select:none;
-  font-family:Arial, sans-serif;
+html, body {
+  margin: 0;
+  padding: 0;
+  background: black;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
 }
 
-#rotate{
-  position:fixed;
-  inset:0;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  background:black;
-  color:white;
-  font-size:32px;
-  z-index:50;
+#ui {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
 }
 
-#topbar{
-  position:fixed;
-  top:0;
-  left:0;
-  right:0;
-  height:50px;
-  background:#111;
-  color:white;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:20;
+#modeBtn {
+  padding: 10px 20px;
+  font-size: 18px;
+  border-radius: 20px;
+  border: none;
 }
 
-#topbar button{
-  font-size:18px;
-  padding:6px 16px;
+canvas {
+  background: #222;
+  display: block;
+  margin: auto;
 }
 
-#gameWrap{
-  position:absolute;
-  top:50px;
-  left:0;
-  right:0;
-  bottom:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+.controls {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-canvas{
-  background:#222;
-  image-rendering:pixelated;
+.left { left: 10px; }
+.right { right: 10px; }
+
+.row {
+  display: flex;
+  gap: 10px;
 }
 
-.controls{
-  position:fixed;
-  bottom:20px;
-  width:180px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  z-index:30;
-}
-
-.left{ left:20px; }
-.right{ right:20px; }
-
-.btn{
-  width:80px;
-  height:80px;
-  border-radius:50%;
-  border:3px solid white;
-  color:white;
-  background:#444;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:16px;
-  user-select:none;
-  touch-action:manipulation;
+.btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: #555;
+  color: white;
+  font-size: 14px;
+  touch-action: manipulation;
 }
 </style>
 </head>
 
 <body>
 
-<div id="rotate">Käännä puhelin vaakaan</div>
-
-<div id="topbar">
+<div id="ui">
   <button id="modeBtn">Yksinpeli</button>
 </div>
 
-<div id="gameWrap">
-  <canvas id="c" width="1280" height="600"></canvas>
-</div>
+<canvas id="game" width="1280" height="600"></canvas>
 
 <div class="controls left">
-  <div class="btn" id="p1Jump">Hyppy</div>
-  <div class="btn" id="p1L">←</div>
-  <div class="btn" id="p1R">→</div>
-  <div class="btn" id="p1Hit">Isku</div>
-  <div class="btn" id="p1Block">Torj.</div>
+  <div class="row">
+    <button class="btn" id="p1Left">←</button>
+    <button class="btn" id="p1Right">→</button>
+  </div>
+  <button class="btn" id="p1Jump">Hyppy</button>
+  <button class="btn" id="p1Punch">Isku</button>
+  <button class="btn" id="p1Kick">Potku</button>
+  <button class="btn" id="p1BlockHigh">Torj ↑</button>
+  <button class="btn" id="p1BlockLow">Torj ↓</button>
 </div>
 
-<div class="controls right" id="p2c" style="display:none">
-  <div class="btn" id="p2Jump">Hyppy</div>
-  <div class="btn" id="p2L">←</div>
-  <div class="btn" id="p2R">→</div>
-  <div class="btn" id="p2Hit">Isku</div>
-  <div class="btn" id="p2Block">Torj.</div>
+<div class="controls right" id="p2Controls" style="display:none">
+  <div class="row">
+    <button class="btn" id="p2Left">←</button>
+    <button class="btn" id="p2Right">→</button>
+  </div>
+  <button class="btn" id="p2Jump">Hyppy</button>
+  <button class="btn" id="p2Punch">Isku</button>
+  <button class="btn" id="p2Kick">Potku</button>
+  <button class="btn" id="p2BlockHigh">Torj ↑</button>
+  <button class="btn" id="p2BlockLow">Torj ↓</button>
 </div>
 
 <script>
-// ===== iOS ZOOM ESTO =====
-let lastTouchEnd=0;
-document.addEventListener("touchend",e=>{
-  const now=Date.now();
-  if(now-lastTouchEnd<=300)e.preventDefault();
-  lastTouchEnd=now;
-},{passive:false});
+// iOS zoom estot
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
 
-// ===== CANVAS & SKAALAUS =====
-const canvas=document.getElementById("c");
-const ctx=canvas.getContext("2d");
-const W=1280,H=600;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-function scaleCanvas(){
-  const scale=Math.min(innerWidth/W,(innerHeight-50)/H);
-  canvas.style.transform=`scale(${scale})`;
-}
-onresize=()=>{
-  document.getElementById("rotate").style.display=
-    innerHeight>innerWidth?"flex":"none";
-  scaleCanvas();
-};
-onresize();
+let multiplayer = false;
 
-// ===== PELITILA =====
-let single=true;
-const modeBtn=document.getElementById("modeBtn");
-const p2c=document.getElementById("p2c");
-
-modeBtn.onclick=()=>{
-  single=!single;
-  modeBtn.textContent=single?"Yksinpeli":"Kaksinpeli";
-  p2c.style.display=single?"none":"flex";
+document.getElementById("modeBtn").onclick = () => {
+  multiplayer = !multiplayer;
+  document.getElementById("modeBtn").innerText = multiplayer ? "Kaksinpeli" : "Yksinpeli";
+  document.getElementById("p2Controls").style.display = multiplayer ? "flex" : "none";
 };
 
-function fighter(x,color){
-  return{
-    x,y:420,vx:0,vy:0,
-    dir:1,
-    hp:20,
-    hit:0,block:0,blockCD:0,flash:0,
-    c:color
-  };
+function Player(x, color) {
+  this.x = x;
+  this.y = 420;
+  this.vy = 0;
+  this.hp = 20;
+  this.color = color;
+  this.action = null;
+  this.actionTime = 0;
 }
 
-let p1=fighter(350,"lime");
-let p2=fighter(930,"cyan");
-let over=false,timer=0;
+const p1 = new Player(500, "lime");
+const p2 = new Player(780, "cyan");
 
-// ===== PIIRTO =====
-function drawFighter(p,o){
-  p.dir=o.x>p.x?1:-1;
-  ctx.strokeStyle=p.flash?"red":p.c;
-  ctx.lineWidth=4;
+function reset() {
+  p1.x = 500; p2.x = 780;
+  p1.hp = p2.hp = 20;
+}
 
-  // pää
+function hit(attacker, defender, range, type) {
+  const d = Math.abs(attacker.x - defender.x);
+  if (d < range && defender.action !== type) {
+    defender.hp--;
+  }
+}
+
+function ai() {
+  if (multiplayer) return;
+  const d = p2.x - p1.x;
+  if (Math.abs(d) > 160) p2.x += d > 0 ? -2 : 2;
+  else {
+    if (Math.random() < 0.02) p2.action = "punch";
+    if (Math.random() < 0.01) p2.action = "kick";
+    if (Math.random() < 0.01) p2.action = "blockHigh";
+    if (Math.random() < 0.01) p2.action = "blockLow";
+  }
+}
+
+function drawPlayer(p, enemy) {
+  const dir = enemy.x > p.x ? 1 : -1;
+  ctx.strokeStyle = p.color;
+  ctx.lineWidth = 4;
+
   ctx.beginPath();
-  ctx.arc(p.x,p.y-240,30,0,Math.PI*2);
+  ctx.arc(p.x, p.y - 80, 20, 0, Math.PI * 2);
   ctx.stroke();
 
-  // vartalo
   ctx.beginPath();
-  ctx.moveTo(p.x,p.y-210);
-  ctx.lineTo(p.x,p.y-120);
+  ctx.moveTo(p.x, p.y - 60);
+  ctx.lineTo(p.x, p.y);
   ctx.stroke();
 
   // jalat
   ctx.beginPath();
-  ctx.moveTo(p.x,p.y-120);
-  ctx.lineTo(p.x-40,p.y);
-  ctx.moveTo(p.x,p.y-120);
-  ctx.lineTo(p.x+40,p.y);
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x - 20, p.y + 50);
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 20, p.y + 50);
   ctx.stroke();
 
-  // käsi
+  // käsi / potku animaatiot
   ctx.beginPath();
-  ctx.moveTo(p.x,p.y-190);
-  if(p.block){
-    ctx.lineTo(p.x+70*p.dir,p.y-240);
-  }else if(p.hit){
-    ctx.lineTo(p.x+120*p.dir,p.y-190);
-  }else{
-    ctx.lineTo(p.x+70*p.dir,p.y-190);
+  if (p.action === "punch") {
+    ctx.moveTo(p.x, p.y - 40);
+    ctx.lineTo(p.x + dir * 80, p.y - 40);
+  } else if (p.action === "kick") {
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + dir * 90, p.y + 10);
+  } else if (p.action === "blockHigh") {
+    ctx.moveTo(p.x, p.y - 50);
+    ctx.lineTo(p.x + dir * 40, p.y - 80);
+  } else if (p.action === "blockLow") {
+    ctx.moveTo(p.x, p.y - 30);
+    ctx.lineTo(p.x + dir * 40, p.y);
+  } else {
+    ctx.moveTo(p.x, p.y - 40);
+    ctx.lineTo(p.x + dir * 40, p.y - 40);
   }
   ctx.stroke();
 }
 
-// ===== LOGIIKKA =====
-function update(p){
-  p.x+=p.vx;
-  p.y+=p.vy;
-  p.vy+=1.2;
-  if(p.y>420){p.y=420;p.vy=0;}
-  p.vx*=0.8;
-  if(p.hit)p.hit--;
-  if(p.block){
-    if(--p.block<=0)p.blockCD=60;
-  }else if(p.blockCD>0)p.blockCD--;
-  if(p.flash)p.flash--;
+function drawHP(p, x) {
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(x, 20, 200, 12);
+  ctx.fillStyle = "red";
+  ctx.fillRect(x, 20, p.hp * 10, 12);
 }
 
-function hit(a,b){
-  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<150){
-    b.hp--;
-    b.flash=8;
-    if(b.hp<=0){over=true;timer=120;}
-  }
+function update() {
+  ai();
+
+  if (p1.action === "punch") hit(p1, p2, 140, "blockHigh");
+  if (p1.action === "kick") hit(p1, p2, 170, "blockLow");
+  if (p2.action === "punch") hit(p2, p1, 140, "blockHigh");
+  if (p2.action === "kick") hit(p2, p1, 170, "blockLow");
+
+  p1.actionTime++; p2.actionTime++;
+  if (p1.actionTime > 20) { p1.action = null; p1.actionTime = 0; }
+  if (p2.actionTime > 20) { p2.action = null; p2.actionTime = 0; }
+
+  if (p1.hp <= 0 || p2.hp <= 0) reset();
 }
 
-function ai(){
-  if(p2.block||p2.hit)return;
-  if(Math.random()<0.03)p2.vx=(p1.x>p2.x?1:-1)*6;
-  if(Math.random()<0.015)p2.hit=10;
-  if(Math.random()<0.01)p2.block=60;
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawHP(p1, 40);
+  drawHP(p2, canvas.width - 240);
+  drawPlayer(p1, p2);
+  drawPlayer(p2, p1);
 }
 
-// ===== ELÄMÄPALKKI =====
-function drawHP(p,x){
-  ctx.strokeStyle="white";
-  ctx.strokeRect(x,20,200,16);
-  ctx.fillStyle="red";
-  ctx.fillRect(x,20,(p.hp/20)*200,16);
-}
-
-// ===== LOOPPI =====
-function loop(){
-  ctx.clearRect(0,0,W,H);
-
-  if(!over){
-    update(p1);update(p2);
-    if(single)ai();
-    hit(p1,p2);hit(p2,p1);
-  }else if(--timer<=0){
-    p1=fighter(350,"lime");
-    p2=fighter(930,"cyan");
-    over=false;
-  }
-
-  drawFighter(p1,p2);
-  drawFighter(p2,p1);
-
-  drawHP(p1,40);
-  drawHP(p2,W-240);
-
-  if(over){
-    ctx.fillStyle="white";
-    ctx.font="50px Arial";
-    ctx.fillText("UUSI ERÄ",W/2-120,H/2);
-  }
-
+function loop() {
+  update();
+  draw();
   requestAnimationFrame(loop);
 }
 loop();
 
-// ===== OHJAIMET =====
-function bind(id,fn){
-  document.getElementById(id).ontouchstart=e=>{
-    e.preventDefault();fn();
-  };
+// napit
+function bind(id, fn) {
+  document.getElementById(id).ontouchstart = e => { e.preventDefault(); fn(); };
 }
 
-bind("p1L",()=>p1.vx=-8);
-bind("p1R",()=>p1.vx=8);
-bind("p1Jump",()=>{if(p1.vy===0)p1.vy=-20});
-bind("p1Hit",()=>{if(!p1.block)p1.hit=10});
-bind("p1Block",()=>{if(!p1.hit&&!p1.blockCD)p1.block=60});
+bind("p1Left", ()=>p1.x-=10);
+bind("p1Right", ()=>p1.x+=10);
+bind("p1Punch", ()=>p1.action="punch");
+bind("p1Kick", ()=>p1.action="kick");
+bind("p1BlockHigh", ()=>p1.action="blockHigh");
+bind("p1BlockLow", ()=>p1.action="blockLow");
 
-bind("p2L",()=>p2.vx=-8);
-bind("p2R",()=>p2.vx=8);
-bind("p2Jump",()=>{if(p2.vy===0)p2.vy=-20});
-bind("p2Hit",()=>{if(!p2.block)p2.hit=10});
-bind("p2Block",()=>{if(!p2.hit&&!p2.blockCD)p2.block=60});
+bind("p2Left", ()=>p2.x-=10);
+bind("p2Right", ()=>p2.x+=10);
+bind("p2Punch", ()=>p2.action="punch");
+bind("p2Kick", ()=>p2.action="kick");
+bind("p2BlockHigh", ()=>p2.action="blockHigh");
+bind("p2BlockLow", ()=>p2.action="blockLow");
 </script>
 </body>
 </html>
+
