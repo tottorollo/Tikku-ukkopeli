@@ -2,7 +2,18 @@
 <html lang="fi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<meta name="viewport" content="
+  width=device-width,
+  initial-scale=1.0,
+  maximum-scale=1.0,
+  user-scalable=no
+">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tikku-ukkopeli">
+
 <title>Tikku-ukkopeli</title>
 
 <style>
@@ -12,6 +23,9 @@ html,body{
   background:black;
   overflow:hidden;
   touch-action:none;
+  overscroll-behavior:none;
+  -webkit-user-select:none;
+  user-select:none;
   font-family:Arial, sans-serif;
 }
 
@@ -24,7 +38,7 @@ html,body{
   background:black;
   color:white;
   font-size:32px;
-  z-index:20;
+  z-index:50;
 }
 
 #topbar{
@@ -38,7 +52,7 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:center;
-  z-index:10;
+  z-index:20;
 }
 
 #topbar button{
@@ -69,7 +83,7 @@ canvas{
   display:flex;
   flex-wrap:wrap;
   gap:10px;
-  z-index:15;
+  z-index:30;
 }
 
 .left{ left:20px; }
@@ -87,6 +101,7 @@ canvas{
   justify-content:center;
   font-size:16px;
   user-select:none;
+  touch-action:manipulation;
 }
 </style>
 </head>
@@ -120,15 +135,21 @@ canvas{
 </div>
 
 <script>
+// ===== iOS ZOOM ESTO =====
+let lastTouchEnd=0;
+document.addEventListener("touchend",e=>{
+  const now=Date.now();
+  if(now-lastTouchEnd<=300)e.preventDefault();
+  lastTouchEnd=now;
+},{passive:false});
+
+// ===== CANVAS & SKAALAUS =====
 const canvas=document.getElementById("c");
 const ctx=canvas.getContext("2d");
 const W=1280,H=600;
 
 function scaleCanvas(){
-  const scale=Math.min(
-    innerWidth/W,
-    (innerHeight-50)/H
-  );
+  const scale=Math.min(innerWidth/W,(innerHeight-50)/H);
   canvas.style.transform=`scale(${scale})`;
 }
 onresize=()=>{
@@ -138,6 +159,7 @@ onresize=()=>{
 };
 onresize();
 
+// ===== PELITILA =====
 let single=true;
 const modeBtn=document.getElementById("modeBtn");
 const p2c=document.getElementById("p2c");
@@ -162,8 +184,8 @@ let p1=fighter(350,"lime");
 let p2=fighter(930,"cyan");
 let over=false,timer=0;
 
-function draw(p,o){
-  const s=2;
+// ===== PIIRTO =====
+function drawFighter(p,o){
   p.dir=o.x>p.x?1:-1;
   ctx.strokeStyle=p.flash?"red":p.c;
   ctx.lineWidth=4;
@@ -191,15 +213,16 @@ function draw(p,o){
   ctx.beginPath();
   ctx.moveTo(p.x,p.y-190);
   if(p.block){
-    ctx.lineTo(p.x+60*p.dir,p.y-240);
+    ctx.lineTo(p.x+70*p.dir,p.y-240);
   }else if(p.hit){
-    ctx.lineTo(p.x+90*p.dir,p.y-190);
+    ctx.lineTo(p.x+120*p.dir,p.y-190);
   }else{
-    ctx.lineTo(p.x+60*p.dir,p.y-190);
+    ctx.lineTo(p.x+70*p.dir,p.y-190);
   }
   ctx.stroke();
 }
 
+// ===== LOGIIKKA =====
 function update(p){
   p.x+=p.vx;
   p.y+=p.vy;
@@ -214,7 +237,7 @@ function update(p){
 }
 
 function hit(a,b){
-  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<120){
+  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<150){
     b.hp--;
     b.flash=8;
     if(b.hp<=0){over=true;timer=120;}
@@ -228,6 +251,15 @@ function ai(){
   if(Math.random()<0.01)p2.block=60;
 }
 
+// ===== ELÄMÄPALKKI =====
+function drawHP(p,x){
+  ctx.strokeStyle="white";
+  ctx.strokeRect(x,20,200,16);
+  ctx.fillStyle="red";
+  ctx.fillRect(x,20,(p.hp/20)*200,16);
+}
+
+// ===== LOOPPI =====
 function loop(){
   ctx.clearRect(0,0,W,H);
 
@@ -241,14 +273,14 @@ function loop(){
     over=false;
   }
 
-  draw(p1,p2);draw(p2,p1);
+  drawFighter(p1,p2);
+  drawFighter(p2,p1);
 
-  ctx.fillStyle="white";
-  ctx.font="20px Arial";
-  ctx.fillText("P1: "+p1.hp,20,40);
-  ctx.fillText("P2: "+p2.hp,W-120,40);
+  drawHP(p1,40);
+  drawHP(p2,W-240);
 
   if(over){
+    ctx.fillStyle="white";
     ctx.font="50px Arial";
     ctx.fillText("UUSI ERÄ",W/2-120,H/2);
   }
@@ -257,6 +289,7 @@ function loop(){
 }
 loop();
 
+// ===== OHJAIMET =====
 function bind(id,fn){
   document.getElementById(id).ontouchstart=e=>{
     e.preventDefault();fn();
