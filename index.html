@@ -1,120 +1,246 @@
 <!DOCTYPE html>
 <html lang="fi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
-  <title>Tikku-ukkopeli</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-    }
-    #gameCanvas {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      background: #222;
-    }
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
 
-    .rotate-warning {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      color: #fff;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      font-size: 24px;
-      padding: 20px;
-      z-index: 1000;
-    }
+<title>Tikku-ukkopeli</title>
 
-    @media (orientation: portrait) {
-      #gameCanvas {
-        display: none;
-      }
-      .rotate-warning {
-        display: flex;
-      }
-    }
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: black;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
 
-    /* Isku-animaatio */
-    @keyframes hitFlash {
-      0%   { background-color: rgba(255, 255, 255, 0.6); }
-      50%  { background-color: transparent; }
-      100% { background-color: rgba(255, 255, 255, 0.6); }
-    }
-    .hitFlash {
-      animation: hitFlash 0.3s ease;
-    }
-  </style>
+canvas {
+  display: block;
+  margin: auto;
+  background: #222;
+}
+
+/* Käännä näyttö -kehotus */
+.rotate-warning {
+  position: fixed;
+  inset: 0;
+  background: black;
+  color: white;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  text-align: center;
+  z-index: 999;
+}
+
+@media (orientation: portrait) {
+  canvas { display: none; }
+  .rotate-warning { display: flex; }
+}
+
+/* mobiilinäppäimet */
+.controls {
+  position: fixed;
+  bottom: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+.controls.left { left: 10px; }
+.controls.right { right: 10px; }
+
+.button {
+  width: 70px;
+  height: 70px;
+  background: rgba(255,255,255,0.15);
+  border: 2px solid white;
+  border-radius: 50%;
+  color: white;
+  font-size: 14px;
+}
+</style>
 </head>
+
 <body>
 
 <div class="rotate-warning">
-  Käännä puhelin **vaaka-asentoon** 💡
+  Käännä puhelin vaaka-asentoon 📱↔️
 </div>
 
-<canvas id="gameCanvas"></canvas>
+<canvas id="game"></canvas>
+
+<!-- Pelaaja 1 -->
+<div class="controls left">
+  <button class="button" id="p1Left">←</button>
+  <button class="button" id="p1Right">→</button>
+  <button class="button" id="p1Hit">Isku</button>
+  <button class="button" id="p1Block">Torj.</button>
+</div>
+
+<!-- Pelaaja 2 -->
+<div class="controls right">
+  <button class="button" id="p2Left">←</button>
+  <button class="button" id="p2Right">→</button>
+  <button class="button" id="p2Hit">Isku</button>
+  <button class="button" id="p2Block">Torj.</button>
+</div>
 
 <script>
-  // canvas ja konteksti
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
+/* ===== KIINTEÄ RESOLUUTIO ===== */
+const GAME_WIDTH = 1280;
+const GAME_HEIGHT = 720;
 
-  function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  const scale = Math.min(
+    window.innerWidth / GAME_WIDTH,
+    window.innerHeight / GAME_HEIGHT
+  );
+  canvas.width = GAME_WIDTH * scale;
+  canvas.height = GAME_HEIGHT * scale;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ===== PELAAJA ===== */
+function createPlayer(x, color) {
+  return {
+    x,
+    y: GAME_HEIGHT - 150,
+    vx: 0,
+    width: 40,
+    height: 100,
+    color,
+    health: 100,
+    isHitting: false,
+    isBlocking: false,
+    hitTimer: 0,
+    blockTimer: 0
+  };
+}
+
+const p1 = createPlayer(300, "lime");
+const p2 = createPlayer(900, "cyan");
+
+/* ===== OHJAUS ===== */
+function bind(btn, down, up) {
+  btn.addEventListener("touchstart", e => { e.preventDefault(); down(); });
+  btn.addEventListener("touchend", e => { e.preventDefault(); up(); });
+}
+
+bind(p1Left, () => p1.vx = -5, () => p1.vx = 0);
+bind(p1Right, () => p1.vx = 5, () => p1.vx = 0);
+bind(p2Left, () => p2.vx = -5, () => p2.vx = 0);
+bind(p2Right, () => p2.vx = 5, () => p2.vx = 0);
+
+bind(p1Hit, () => hit(p1), () => {});
+bind(p2Hit, () => hit(p2), () => {});
+bind(p1Block, () => block(p1), () => {});
+bind(p2Block, () => block(p2), () => {});
+
+/* ===== LOGIIKKA ===== */
+function hit(p) {
+  p.isHitting = true;
+  p.hitTimer = 20;
+}
+
+function block(p) {
+  p.isBlocking = true;
+  p.blockTimer = 30;
+}
+
+function updatePlayer(p) {
+  p.x += p.vx;
+  p.x = Math.max(0, Math.min(GAME_WIDTH, p.x));
+
+  if (p.hitTimer > 0) p.hitTimer--;
+  else p.isHitting = false;
+
+  if (p.blockTimer > 0) p.blockTimer--;
+  else p.isBlocking = false;
+}
+
+/* ===== TÖRMÄYS & ISKU ===== */
+function checkHit(attacker, defender) {
+  if (!attacker.isHitting) return;
+
+  const dist = Math.abs(attacker.x - defender.x);
+  if (dist < 80) {
+    if (!defender.isBlocking) {
+      defender.health -= 1;
+      hitEffect(defender.x, defender.y);
+    }
   }
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
+}
 
-  // yksinkertainen peli-tilanne
-  let hitEffectFrames = 0;
+/* ===== ISKUANIMAATIO ===== */
+let hitFX = [];
 
-  function draw() {
-    // tyhjennä näyttö
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function hitEffect(x, y) {
+  hitFX.push({ x, y, r: 10 });
+}
 
-    // (Tähän oma pelisi piirto-logiikka)
-
-    // esimerkki: piirretään ympyrä keskelle
-    ctx.fillStyle = '#0f0';
+function drawHitFX() {
+  hitFX.forEach(fx => {
+    ctx.strokeStyle = "red";
     ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 40, 0, 2 * Math.PI);
-    ctx.fill();
-
-    requestAnimationFrame(draw);
-  }
-
-  draw();
-
-  // **isku-animaatio**
-  function triggerHitAnimation() {
-    canvas.classList.add('hitFlash');
-    hitEffectFrames++;
-    setTimeout(() => {
-      canvas.classList.remove('hitFlash');
-    }, 300);
-  }
-
-  // Esimerkki: kun klikataan / napautetaan, laukaise isku
-  canvas.addEventListener('click', () => {
-    triggerHitAnimation();
-    // tähän voit liittää oman osu­ma-tarkistuksen
+    ctx.arc(fx.x, fx.y - 50, fx.r, 0, Math.PI * 2);
+    ctx.stroke();
+    fx.r += 3;
   });
+  hitFX = hitFX.filter(fx => fx.r < 60);
+}
 
-  // Estä vieritys pelinäytöllä
-  document.body.addEventListener("touchmove", function(e) {
-    e.preventDefault();
-  }, { passive: false });
+/* ===== PIIRTO ===== */
+function drawPlayer(p) {
+  ctx.strokeStyle = p.color;
+  ctx.lineWidth = 4;
 
+  // vartalo
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y - 80);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+
+  // kädet
+  ctx.beginPath();
+  ctx.moveTo(p.x - 30, p.y - 50);
+  ctx.lineTo(p.x + (p.isHitting ? 50 : 30), p.y - 50);
+  ctx.stroke();
+}
+
+function drawHUD() {
+  ctx.fillStyle = "red";
+  ctx.fillRect(50, 30, p1.health * 2, 20);
+  ctx.fillRect(GAME_WIDTH - 50 - p2.health * 2, 30, p2.health * 2, 20);
+}
+
+function loop() {
+  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+  updatePlayer(p1);
+  updatePlayer(p2);
+
+  checkHit(p1, p2);
+  checkHit(p2, p1);
+
+  drawPlayer(p1);
+  drawPlayer(p2);
+  drawHitFX();
+  drawHUD();
+
+  requestAnimationFrame(loop);
+}
+
+loop();
 </script>
 
 </body>
