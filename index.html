@@ -6,165 +6,257 @@
 <title>Tikku-ukkopeli</title>
 
 <style>
-html,body{margin:0;padding:0;background:black;height:100%;overflow:hidden;touch-action:none}
-canvas{display:block;margin:auto;background:#222}
-.rotate-warning{position:fixed;inset:0;background:black;color:white;display:none;align-items:center;justify-content:center;font-size:26px;z-index:10}
-@media (orientation:portrait){canvas{display:none}.rotate-warning{display:flex}}
-.controls{position:fixed;bottom:10px;display:flex;flex-direction:column;gap:6px}
-.controls.left{left:10px}.controls.right{right:10px}
-.row{display:flex;gap:8px}
-.button{width:70px;height:70px;border-radius:50%;border:2px solid white;background:rgba(255,255,255,.15);color:white}
-.menu{position:fixed;inset:0;background:black;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20}
+html,body{
+  margin:0;
+  padding:0;
+  background:black;
+  overflow:hidden;
+  touch-action:none;
+  font-family:Arial, sans-serif;
+}
+
+#rotate{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:black;
+  color:white;
+  font-size:32px;
+  z-index:10;
+}
+
+#topbar{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:50px;
+  background:#111;
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:5;
+}
+
+#topbar button{
+  font-size:18px;
+  padding:6px 14px;
+}
+
+canvas{
+  display:block;
+  margin:auto;
+  background:#222;
+}
+
+.controls{
+  position:fixed;
+  bottom:20px;
+  display:flex;
+  flex-wrap:wrap;
+  width:180px;
+  gap:10px;
+  z-index:5;
+}
+
+.left{ left:20px; }
+.right{ right:20px; }
+
+.btn{
+  width:80px;
+  height:80px;
+  border-radius:50%;
+  border:3px solid white;
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+  background:#444;
+  user-select:none;
+}
 </style>
 </head>
 
 <body>
 
-<div class="rotate-warning">Käännä puhelin vaaka-asentoon 📱↔️</div>
+<div id="rotate">Käännä puhelin vaakaan</div>
 
-<div class="menu" id="menu">
-  <h1>TIKKU-UKKOPELI</h1>
-  <button class="button" onclick="startGame(false)">Yksinpeli</button>
-  <button class="button" onclick="startGame(true)">Kaksinpeli</button>
+<div id="topbar">
+  <button id="modeBtn">Yksinpeli</button>
 </div>
 
-<canvas id="game"></canvas>
+<canvas id="c"></canvas>
 
-<!-- P1 -->
-<div class="controls left" id="p1Controls">
-  <button class="button" id="p1Jump">Hyppy</button>
-  <div class="row">
-    <button class="button" id="p1Left">←</button>
-    <button class="button" id="p1Right">→</button>
-  </div>
-  <div class="row">
-    <button class="button" id="p1Hit">Isku</button>
-    <button class="button" id="p1Block">Torj.</button>
-  </div>
+<div class="controls left" id="p1c">
+  <div class="btn" id="p1Jump">Hyppy</div>
+  <div class="btn" id="p1L">←</div>
+  <div class="btn" id="p1R">→</div>
+  <div class="btn" id="p1Hit">Isku</div>
+  <div class="btn" id="p1Block">Torj.</div>
 </div>
 
-<!-- P2 -->
-<div class="controls right" id="p2Controls">
-  <button class="button" id="p2Jump">Hyppy</button>
-  <div class="row">
-    <button class="button" id="p2Left">←</button>
-    <button class="button" id="p2Right">→</button>
-  </div>
-  <div class="row">
-    <button class="button" id="p2Hit">Isku</button>
-    <button class="button" id="p2Block">Torj.</button>
-  </div>
+<div class="controls right" id="p2c" style="display:none">
+  <div class="btn" id="p2Jump">Hyppy</div>
+  <div class="btn" id="p2L">←</div>
+  <div class="btn" id="p2R">→</div>
+  <div class="btn" id="p2Hit">Isku</div>
+  <div class="btn" id="p2Block">Torj.</div>
 </div>
 
 <script>
-/* === ASETUKSET === */
-const W=1280,H=720,MAX_HITS=20;
+const c=document.getElementById("c"),x=c.getContext("2d");
+const W=1280,H=600;
+c.width=W; c.height=H;
+
+const rotate=document.getElementById("rotate");
+function checkOrientation(){
+  rotate.style.display=innerHeight>innerWidth?"flex":"none";
+}
+onresize=checkOrientation; checkOrientation();
+
 let singlePlayer=true;
+const modeBtn=document.getElementById("modeBtn");
+const p2c=document.getElementById("p2c");
 
-/* === CANVAS === */
-const c=document.getElementById("game"),x=c.getContext("2d");
-function resize(){
-  const s=Math.min(innerWidth/W,innerHeight/H);
-  c.width=W*s;c.height=H*s;x.setTransform(s,0,0,s,0,0)
-}
-addEventListener("resize",resize);resize();
+modeBtn.onclick=()=>{
+  singlePlayer=!singlePlayer;
+  modeBtn.textContent=singlePlayer?"Yksinpeli":"Kaksinpeli";
+  p2c.style.display=singlePlayer?"none":"flex";
+};
 
-/* === PELAAJA === */
-function player(xPos,col){
+function fighter(xpos,color){
   return{
-    x:xPos,y:H-200,vx:0,vy:0,dir:1,
-    color:col,hits:0,hitT:0,blockT:0,onGround:true
-  }
-}
-let p1,p2,over=false,roundTimer=0;
-
-/* === MENU === */
-function startGame(two){
-  singlePlayer=!two;
-  menu.style.display="none";
-  p2Controls.style.display=singlePlayer?"none":"flex";
-  resetRound();
+    x:xpos,y:420,vx:0,vy:0,
+    dir:1,
+    hp:20,
+    hit:0,block:0,blockCD:0,flash:0,
+    c:color
+  };
 }
 
-/* === OHJAUS === */
-function bind(id,fn){id.addEventListener("touchstart",e=>{e.preventDefault();fn()})}
-bind(p1Left,()=>p1.vx=-6);bind(p1Right,()=>p1.vx=6);
-bind(p1Jump,()=>jump(p1));bind(p1Hit,()=>hit(p1));bind(p1Block,()=>block(p1));
-bind(p2Left,()=>p2.vx=-6);bind(p2Right,()=>p2.vx=6);
-bind(p2Jump,()=>jump(p2));bind(p2Hit,()=>hit(p2));bind(p2Block,()=>block(p2));
-addEventListener("touchend",()=>{p1.vx=p2.vx=0});
+let p1=fighter(350,"lime");
+let p2=fighter(930,"cyan");
+let over=false, timer=0;
 
-/* === TOIMINNOT === */
-function jump(p){if(p.onGround){p.vy=-18;p.onGround=false}}
-function hit(p){if(p.blockT<=0){p.hitT=8}}
-function block(p){p.blockT=60}
-
-/* === AI === */
-function ai(){
-  const d=p1.x-p2.x;
-  p2.vx=Math.abs(d)>120?Math.sign(d)*4:0;
-  if(Math.random()<0.01)hit(p2);
-  if(Math.random()<0.01)block(p2);
-  if(Math.random()<0.005)jump(p2);
-}
-
-/* === PÄIVITYS === */
-function upd(p){
-  p.x+=p.vx;p.y+=p.vy;p.vy+=1;
-  if(p.y>=H-200){p.y=H-200;p.vy=0;p.onGround=true}
-  p.hitT=Math.max(0,p.hitT-1);
-  p.blockT=Math.max(0,p.blockT-1);
-}
-function check(a,d){
-  if(a.hitT>0&&Math.abs(a.x-d.x)<90&&d.blockT<=0){
-    d.hits++;if(d.hits>=MAX_HITS)endRound()
-  }
-}
-
-/* === ERÄ === */
-function endRound(){over=true;roundTimer=120}
-function resetRound(){
-  p1=player(350,"lime");p2=player(930,"cyan");
-  over=false
-}
-
-/* === PIIRTO === */
 function draw(p,o){
-  p.dir=p.x<o.x?1:-1;
-  x.strokeStyle=p.blockT>0?"yellow":p.color;
+  const s=2;
+  const fx=p.x, fy=p.y;
+
+  // suunta vastustajaan
+  p.dir=o.x>p.x?1:-1;
+
+  x.strokeStyle=p.flash?"red":p.c;
   x.lineWidth=4;
-  x.beginPath();x.moveTo(p.x,p.y-160);x.lineTo(p.x,p.y);x.stroke();
+
+  // pää
   x.beginPath();
-  x.moveTo(p.x,p.y-100);
-  if(p.blockT>0)
-    x.lineTo(p.x+40*p.dir,p.y-140);
-  else
-    x.lineTo(p.x+(p.hitT>0?80:40)*p.dir,p.y-100);
-  x.stroke();
+  x.arc(fx,fy-120*s,15*s,0,Math.PI*2); x.stroke();
+
+  // vartalo
   x.beginPath();
-  x.moveTo(p.x,p.y);x.lineTo(p.x-30,p.y+60);
-  x.moveTo(p.x,p.y);x.lineTo(p.x+30,p.y+60);
+  x.moveTo(fx,fy-105*s);
+  x.lineTo(fx,fy-60*s); x.stroke();
+
+  // jalat
+  x.beginPath();
+  x.moveTo(fx,fy-60*s);
+  x.lineTo(fx-20*s,fy); x.stroke();
+  x.beginPath();
+  x.moveTo(fx,fy-60*s);
+  x.lineTo(fx+20*s,fy); x.stroke();
+
+  // käsi
+  x.beginPath();
+  x.moveTo(fx,fy-95*s);
+  if(p.block){
+    x.lineTo(fx+25*p.dir*s,fy-120*s);
+  }else if(p.hit){
+    x.lineTo(fx+45*p.dir*s,fy-95*s);
+  }else{
+    x.lineTo(fx+30*p.dir*s,fy-95*s);
+  }
   x.stroke();
-}
-function hud(){
-  x.fillStyle="red";
-  x.fillRect(50,30,(MAX_HITS-p1.hits)*15,20);
-  x.fillRect(W-50-(MAX_HITS-p2.hits)*15,30,(MAX_HITS-p2.hits)*15,20);
 }
 
-/* === LOOP === */
+function update(p){
+  p.x+=p.vx;
+  p.y+=p.vy;
+  p.vy+=1.2;
+
+  if(p.y>420){ p.y=420; p.vy=0; }
+
+  p.vx*=0.8;
+  if(p.hit) p.hit--;
+  if(p.block){
+    if(--p.block<=0) p.blockCD=60;
+  }else if(p.blockCD>0) p.blockCD--;
+  if(p.flash) p.flash--;
+}
+
+function hit(a,b){
+  if(a.hit===10 && !b.block && Math.abs(a.x-b.x)<80){
+    b.hp--;
+    b.flash=8;
+    if(b.hp<=0){ over=true; timer=120; }
+  }
+}
+
+function ai(){
+  if(p2.block||p2.hit) return;
+  if(Math.random()<0.02) p2.vx=(p1.x>p2.x?1:-1)*6;
+  if(Math.random()<0.01) p2.hit=10;
+  if(Math.random()<0.01) p2.block=60;
+}
+
 function loop(){
   x.clearRect(0,0,W,H);
+
   if(!over){
-    upd(p1);upd(p2);
-    if(singlePlayer)ai();
-    check(p1,p2);check(p2,p1)
-  }else if(--roundTimer<=0)resetRound();
-  draw(p1,p2);draw(p2,p1);hud();
-  if(over){x.fillStyle="white";x.font="60px Arial";x.fillText("UUSI ERÄ",W/2-150,H/2)}
-  requestAnimationFrame(loop)
+    update(p1); update(p2);
+    if(singlePlayer) ai();
+    hit(p1,p2); hit(p2,p1);
+  }else if(--timer<=0){
+    p1=fighter(350,"lime");
+    p2=fighter(930,"cyan");
+    over=false;
+  }
+
+  draw(p1,p2); draw(p2,p1);
+
+  x.fillStyle="white";
+  x.font="20px Arial";
+  x.fillText("P1: "+p1.hp,20,80);
+  x.fillText("P2: "+p2.hp,W-120,80);
+
+  if(over){
+    x.font="50px Arial";
+    x.fillText("UUSI ERÄ",W/2-120,H/2);
+  }
+
+  requestAnimationFrame(loop);
 }
 loop();
+
+function bind(btn,fn){
+  btn.ontouchstart=e=>{e.preventDefault();fn();};
+}
+bind(p1L,()=>p1.vx=-8);
+bind(p1R,()=>p1.vx=8);
+bind(p1Jump,()=>{if(p1.vy==0)p1.vy=-20});
+bind(p1Hit,()=>{if(!p1.block)p1.hit=10});
+bind(p1Block,()=>{if(!p1.hit&&!p1.blockCD)p1.block=60});
+
+bind(p2L,()=>p2.vx=-8);
+bind(p2R,()=>p2.vx=8);
+bind(p2Jump,()=>{if(p2.vy==0)p2.vy=-20});
+bind(p2Hit,()=>{if(!p2.block)p2.hit=10});
+bind(p2Block,()=>{if(!p2.hit&&!p2.blockCD)p2.block=60});
+
+document.addEventListener("touchstart",()=>{}, {passive:false});
 </script>
 </body>
 </html>
