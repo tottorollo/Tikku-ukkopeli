@@ -2,71 +2,36 @@
 <html lang="fi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Tikku-ukkopeli</title>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: black;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  touch-action: none;
-}
-canvas {
-  display: block;
-  margin: auto;
-  background: #222;
-}
-.rotate-warning {
-  position: fixed;
-  inset: 0;
-  background: black;
-  color: white;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  z-index: 999;
-}
-@media (orientation: portrait) {
-  canvas { display: none; }
-  .rotate-warning { display: flex; }
-}
-.controls {
-  position: fixed;
-  bottom: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.controls.left { left: 10px; }
-.controls.right { right: 10px; }
-.row {
-  display: flex;
-  gap: 8px;
-}
-.button {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  border: 2px solid white;
-  background: rgba(255,255,255,0.15);
-  color: white;
-  font-size: 14px;
-}
+html,body{margin:0;padding:0;background:black;height:100%;overflow:hidden;touch-action:none}
+canvas{display:block;margin:auto;background:#222}
+.rotate-warning{position:fixed;inset:0;background:black;color:white;display:none;align-items:center;justify-content:center;font-size:26px;z-index:10}
+@media (orientation:portrait){canvas{display:none}.rotate-warning{display:flex}}
+.controls{position:fixed;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.controls.left{left:10px}.controls.right{right:10px}
+.row{display:flex;gap:8px}
+.button{width:70px;height:70px;border-radius:50%;border:2px solid white;background:rgba(255,255,255,.15);color:white}
+.menu{position:fixed;inset:0;background:black;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20}
 </style>
 </head>
 
 <body>
 
 <div class="rotate-warning">Käännä puhelin vaaka-asentoon 📱↔️</div>
+
+<div class="menu" id="menu">
+  <h1>TIKKU-UKKOPELI</h1>
+  <button class="button" onclick="startGame(false)">Yksinpeli</button>
+  <button class="button" onclick="startGame(true)">Kaksinpeli</button>
+</div>
+
 <canvas id="game"></canvas>
 
-<!-- Pelaaja 1 -->
-<div class="controls left">
+<!-- P1 -->
+<div class="controls left" id="p1Controls">
   <button class="button" id="p1Jump">Hyppy</button>
   <div class="row">
     <button class="button" id="p1Left">←</button>
@@ -78,8 +43,8 @@ canvas {
   </div>
 </div>
 
-<!-- Pelaaja 2 -->
-<div class="controls right">
+<!-- P2 -->
+<div class="controls right" id="p2Controls">
   <button class="button" id="p2Jump">Hyppy</button>
   <div class="row">
     <button class="button" id="p2Left">←</button>
@@ -92,205 +57,114 @@ canvas {
 </div>
 
 <script>
-/* ===== PELIN ASETUKSET ===== */
-const GAME_WIDTH = 1280;
-const GAME_HEIGHT = 720;
-const MAX_HITS = 20;
+/* === ASETUKSET === */
+const W=1280,H=720,MAX_HITS=20;
+let singlePlayer=true;
 
-/* ===== CANVAS ===== */
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-function resize() {
-  const scale = Math.min(
-    window.innerWidth / GAME_WIDTH,
-    window.innerHeight / GAME_HEIGHT
-  );
-  canvas.width = GAME_WIDTH * scale;
-  canvas.height = GAME_HEIGHT * scale;
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+/* === CANVAS === */
+const c=document.getElementById("game"),x=c.getContext("2d");
+function resize(){
+  const s=Math.min(innerWidth/W,innerHeight/H);
+  c.width=W*s;c.height=H*s;x.setTransform(s,0,0,s,0,0)
 }
-window.addEventListener("resize", resize);
-resize();
+addEventListener("resize",resize);resize();
 
-/* ===== PELAAJA ===== */
-function createPlayer(x, color) {
-  return {
-    x,
-    y: GAME_HEIGHT - 200,
-    vx: 0,
-    vy: 0,
-    scale: 2,
-    color,
-    hitsTaken: 0,
-    isHitting: false,
-    hitTimer: 0,
-    isBlocking: false,
-    blockTimer: 0,
-    onGround: true
-  };
-}
-
-let p1 = createPlayer(350, "lime");
-let p2 = createPlayer(930, "cyan");
-let roundOver = false;
-let roundTextTimer = 0;
-
-/* ===== OHJAUS ===== */
-function bind(btn, down) {
-  btn.addEventListener("touchstart", e => { e.preventDefault(); down(); });
-}
-
-bind(p1Left, () => p1.vx = -6);
-bind(p1Right, () => p1.vx = 6);
-bind(p2Left, () => p2.vx = -6);
-bind(p2Right, () => p2.vx = 6);
-
-bind(p1Jump, () => jump(p1));
-bind(p2Jump, () => jump(p2));
-bind(p1Hit, () => hit(p1));
-bind(p2Hit, () => hit(p2));
-bind(p1Block, () => block(p1));
-bind(p2Block, () => block(p2));
-
-document.addEventListener("touchend", () => {
-  p1.vx = 0;
-  p2.vx = 0;
-});
-
-/* ===== TOIMINNOT ===== */
-function jump(p) {
-  if (p.onGround) {
-    p.vy = -18;
-    p.onGround = false;
+/* === PELAAJA === */
+function player(xPos,col){
+  return{
+    x:xPos,y:H-200,vx:0,vy:0,dir:1,
+    color:col,hits:0,hitT:0,blockT:0,onGround:true
   }
 }
-function hit(p) {
-  p.isHitting = true;
-  p.hitTimer = 8; // lyhyempi osumaikkuna
-}
-function block(p) {
-  p.isBlocking = true;
-  p.blockTimer = 120; // 2 sekuntia (60fps)
-}
+let p1,p2,over=false,roundTimer=0;
 
-/* ===== PÄIVITYS ===== */
-function updatePlayer(p) {
-  p.x += p.vx;
-  p.y += p.vy;
-  p.vy += 1.1;
-
-  if (p.y >= GAME_HEIGHT - 200) {
-    p.y = GAME_HEIGHT - 200;
-    p.vy = 0;
-    p.onGround = true;
-  }
-
-  if (p.hitTimer > 0) p.hitTimer--;
-  else p.isHitting = false;
-
-  if (p.blockTimer > 0) p.blockTimer--;
-  else p.isBlocking = false;
+/* === MENU === */
+function startGame(two){
+  singlePlayer=!two;
+  menu.style.display="none";
+  p2Controls.style.display=singlePlayer?"none":"flex";
+  resetRound();
 }
 
-/* ===== ISKUT ===== */
-let hitFX = [];
-function checkHit(a, d) {
-  if (!a.isHitting || roundOver) return;
-  if (Math.abs(a.x - d.x) < 90) {
-    if (!d.isBlocking) {
-      d.hitsTaken++;
-      hitFX.push({x:d.x,y:d.y,r:20});
-      if (d.hitsTaken >= MAX_HITS) endRound();
-    }
+/* === OHJAUS === */
+function bind(id,fn){id.addEventListener("touchstart",e=>{e.preventDefault();fn()})}
+bind(p1Left,()=>p1.vx=-6);bind(p1Right,()=>p1.vx=6);
+bind(p1Jump,()=>jump(p1));bind(p1Hit,()=>hit(p1));bind(p1Block,()=>block(p1));
+bind(p2Left,()=>p2.vx=-6);bind(p2Right,()=>p2.vx=6);
+bind(p2Jump,()=>jump(p2));bind(p2Hit,()=>hit(p2));bind(p2Block,()=>block(p2));
+addEventListener("touchend",()=>{p1.vx=p2.vx=0});
+
+/* === TOIMINNOT === */
+function jump(p){if(p.onGround){p.vy=-18;p.onGround=false}}
+function hit(p){if(p.blockT<=0){p.hitT=8}}
+function block(p){p.blockT=60}
+
+/* === AI === */
+function ai(){
+  const d=p1.x-p2.x;
+  p2.vx=Math.abs(d)>120?Math.sign(d)*4:0;
+  if(Math.random()<0.01)hit(p2);
+  if(Math.random()<0.01)block(p2);
+  if(Math.random()<0.005)jump(p2);
+}
+
+/* === PÄIVITYS === */
+function upd(p){
+  p.x+=p.vx;p.y+=p.vy;p.vy+=1;
+  if(p.y>=H-200){p.y=H-200;p.vy=0;p.onGround=true}
+  p.hitT=Math.max(0,p.hitT-1);
+  p.blockT=Math.max(0,p.blockT-1);
+}
+function check(a,d){
+  if(a.hitT>0&&Math.abs(a.x-d.x)<90&&d.blockT<=0){
+    d.hits++;if(d.hits>=MAX_HITS)endRound()
   }
 }
 
-/* ===== ERÄ ===== */
-function endRound() {
-  roundOver = true;
-  roundTextTimer = 120;
-}
-function resetRound() {
-  p1 = createPlayer(350, "lime");
-  p2 = createPlayer(930, "cyan");
-  roundOver = false;
+/* === ERÄ === */
+function endRound(){over=true;roundTimer=120}
+function resetRound(){
+  p1=player(350,"lime");p2=player(930,"cyan");
+  over=false
 }
 
-/* ===== PIIRTO ===== */
-function drawPlayer(p) {
-  const s = p.scale;
-  ctx.strokeStyle = p.isBlocking ? "yellow" : p.color;
-  ctx.lineWidth = 4;
-
-  // vartalo
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y - 80*s);
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-
-  // kädet
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y - 50*s);
-  ctx.lineTo(p.x + (p.isHitting ? 60*s : 30*s), p.y - 50*s);
-  ctx.stroke();
-
-  // jalat
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y);
-  ctx.lineTo(p.x - 25*s, p.y + 50*s);
-  ctx.moveTo(p.x, p.y);
-  ctx.lineTo(p.x + 25*s, p.y + 50*s);
-  ctx.stroke();
+/* === PIIRTO === */
+function draw(p,o){
+  p.dir=p.x<o.x?1:-1;
+  x.strokeStyle=p.blockT>0?"yellow":p.color;
+  x.lineWidth=4;
+  x.beginPath();x.moveTo(p.x,p.y-160);x.lineTo(p.x,p.y);x.stroke();
+  x.beginPath();
+  x.moveTo(p.x,p.y-100);
+  if(p.blockT>0)
+    x.lineTo(p.x+40*p.dir,p.y-140);
+  else
+    x.lineTo(p.x+(p.hitT>0?80:40)*p.dir,p.y-100);
+  x.stroke();
+  x.beginPath();
+  x.moveTo(p.x,p.y);x.lineTo(p.x-30,p.y+60);
+  x.moveTo(p.x,p.y);x.lineTo(p.x+30,p.y+60);
+  x.stroke();
+}
+function hud(){
+  x.fillStyle="red";
+  x.fillRect(50,30,(MAX_HITS-p1.hits)*15,20);
+  x.fillRect(W-50-(MAX_HITS-p2.hits)*15,30,(MAX_HITS-p2.hits)*15,20);
 }
 
-function drawFX() {
-  hitFX.forEach(fx => {
-    ctx.strokeStyle = "red";
-    ctx.beginPath();
-    ctx.arc(fx.x, fx.y - 80, fx.r, 0, Math.PI*2);
-    ctx.stroke();
-    fx.r += 3;
-  });
-  hitFX = hitFX.filter(fx => fx.r < 60);
+/* === LOOP === */
+function loop(){
+  x.clearRect(0,0,W,H);
+  if(!over){
+    upd(p1);upd(p2);
+    if(singlePlayer)ai();
+    check(p1,p2);check(p2,p1)
+  }else if(--roundTimer<=0)resetRound();
+  draw(p1,p2);draw(p2,p1);hud();
+  if(over){x.fillStyle="white";x.font="60px Arial";x.fillText("UUSI ERÄ",W/2-150,H/2)}
+  requestAnimationFrame(loop)
 }
-
-function drawHUD() {
-  ctx.fillStyle = "red";
-  ctx.fillRect(50,30,(MAX_HITS-p1.hitsTaken)*15,20);
-  ctx.fillRect(GAME_WIDTH-50-(MAX_HITS-p2.hitsTaken)*15,30,(MAX_HITS-p2.hitsTaken)*15,20);
-}
-
-/* ===== LOOP ===== */
-function loop() {
-  ctx.clearRect(0,0,GAME_WIDTH,GAME_HEIGHT);
-
-  if (!roundOver) {
-    updatePlayer(p1);
-    updatePlayer(p2);
-    checkHit(p1,p2);
-    checkHit(p2,p1);
-  } else {
-    roundTextTimer--;
-    if (roundTextTimer <= 0) resetRound();
-  }
-
-  drawPlayer(p1);
-  drawPlayer(p2);
-  drawFX();
-  drawHUD();
-
-  if (roundOver) {
-    ctx.fillStyle = "white";
-    ctx.font = "60px Arial";
-    ctx.fillText("UUSI ERÄ", GAME_WIDTH/2-150, GAME_HEIGHT/2);
-  }
-
-  requestAnimationFrame(loop);
-}
-
 loop();
 </script>
 </body>
 </html>
-
