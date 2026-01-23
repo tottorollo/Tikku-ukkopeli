@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <style>
 html, body {
@@ -52,6 +53,7 @@ canvas {
   display: block;
   width: 100vw;
   height: 100vh;
+  object-fit: contain;
 }
 
 .controls {
@@ -69,6 +71,7 @@ canvas {
 .row {
   display: flex;
   gap: 10px;
+  justify-content: center;
 }
 
 .btn {
@@ -80,6 +83,15 @@ canvas {
   color: white;
   font-size: 12px;
   font-weight: bold;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.btn:active {
+  background: #888;
 }
 </style>
 </head>
@@ -89,6 +101,7 @@ canvas {
 <div id="ui">
   <button id="modeBtn">Yksinpeli</button>
 </div>
+
 <div id="winText"></div>
 
 <canvas id="game" width="1280" height="720"></canvas>
@@ -106,46 +119,72 @@ canvas {
   </div>
 </div>
 
+<div class="controls right" id="p2Controls" style="display:none">
+  <div class="row">
+    <button class="btn" id="p2Left">←</button>
+    <button class="btn" id="p2Right">→</button>
+    <button class="btn" id="p2Jump">HYPPY</button>
+  </div>
+  <div class="row">
+    <button class="btn" id="p2Punch">ISKU</button>
+    <button class="btn" id="p2Kick">POTKU</button>
+    <button class="btn" id="p2BlockHigh">TORJ ↑</button>
+  </div>
+</div>
+
 <script>
+// iOS zoom estot
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const GROUND_Y = canvas.height / 2 + 50;
 
 let multiplayer = false;
-let winnerTimer = 0;
-let hitEffects = [];
+const GROUND_Y = canvas.height / 2 + 50;
 
 document.getElementById("modeBtn").onclick = () => {
   multiplayer = !multiplayer;
   document.getElementById("modeBtn").innerText = multiplayer ? "Kaksinpeli" : "Yksinpeli";
+  document.getElementById("p2Controls").style.display = multiplayer ? "flex" : "none";
 };
 
 function Player(x, color) {
   this.x = x;
   this.y = GROUND_Y;
   this.vy = 0;
+  this.onGround = true;
   this.hp = 20;
   this.color = color;
   this.action = null;
   this.actionTime = 0;
   this.moving = 0;
-  this.onGround = true;
 }
 
 const p1 = new Player(400, "lime");
 const p2 = new Player(880, "cyan");
 
+let hitEffects = [];
+let winTimer = 0;
+
 function reset() {
   p1.x = 400; p2.x = 880;
   p1.hp = p2.hp = 20;
   p1.y = p2.y = GROUND_Y;
+  p1.vy = p2.vy = 0;
+  p1.onGround = p2.onGround = true;
   document.getElementById("winText").style.display = "none";
+  winTimer = 0;
 }
 
-function hit(attacker, defender, range) {
+function hit(attacker, defender, range, type) {
   const d = Math.abs(attacker.x - defender.x);
-  if (d < range && defender.action !== "blockHigh") {
-    defender.hp -= 0.2;
+  if (d < range && defender.action !== type) {
+    defender.hp -= 0.1;
     hitEffects.push({ x: defender.x, y: defender.y - 60, t: 8 });
   }
 }
@@ -153,16 +192,16 @@ function hit(attacker, defender, range) {
 function ai() {
   if (multiplayer) return;
   const d = p2.x - p1.x;
-  p2.moving = d > 0 ? -1 : 1;
-  if (Math.abs(d) < 160 && Math.random() < 0.05) p2.action = "punch";
+  if (Math.abs(d) > 150) p2.x += d > 0 ? -3 : 3;
+  else if (Math.random() < 0.05) p2.action = "punch";
 }
 
 function update() {
   ai();
 
   [p1, p2].forEach(p => {
-    p.x += p.moving * 4;
-    p.x = Math.max(40, Math.min(canvas.width - 40, p.x));
+    p.x += p.moving * 5;
+    p.x = Math.max(50, Math.min(canvas.width - 50, p.x));
 
     if (!p.onGround) {
       p.vy += 1;
@@ -183,16 +222,16 @@ function update() {
     }
   });
 
-  if (p1.action === "punch") hit(p1, p2, 140);
-  if (p1.action === "kick") hit(p1, p2, 170);
-  if (p2.action === "punch") hit(p2, p1, 140);
+  if (p1.action === "punch") hit(p1, p2, 120, "blockHigh");
+  if (p1.action === "kick") hit(p1, p2, 140, "none");
+  if (p2.action === "punch") hit(p2, p1, 120, "blockHigh");
 
   if (p1.hp <= 0 || p2.hp <= 0) {
     const txt = document.getElementById("winText");
     txt.innerText = p1.hp <= 0 ? "Pelaaja 2 voittaa!" : "Pelaaja 1 voittaa!";
     txt.style.display = "block";
-    winnerTimer++;
-    if (winnerTimer > 120) { winnerTimer = 0; reset(); }
+    winTimer++;
+    if (winTimer > 120) reset();
   }
 }
 
@@ -210,23 +249,16 @@ function drawPlayer(p, enemy) {
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
 
-  // jalat
   ctx.beginPath();
-  if (p.action === "kick") {
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + dir * 80, p.y + 10);
-  } else {
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x - 20, p.y + 50);
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + 20, p.y + 50);
-  }
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x - 20, p.y + 50);
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 20, p.y + 50);
   ctx.stroke();
 
-  // käsi
   ctx.beginPath();
   ctx.moveTo(p.x, p.y - 40);
-  ctx.lineTo(p.x + dir * 40, p.y - 40);
+  ctx.lineTo(p.x + dir * (p.action === "punch" ? 80 : 30), p.y - 40);
   ctx.stroke();
 }
 
@@ -234,7 +266,7 @@ function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   hitEffects.forEach(h => {
-    ctx.fillStyle = "rgba(255,0,0,0.5)";
+    ctx.fillStyle = "rgba(255,0,0,0.6)";
     ctx.beginPath();
     ctx.arc(h.x, h.y, 20, 0, Math.PI * 2);
     ctx.fill();
@@ -253,16 +285,18 @@ function loop() {
 }
 loop();
 
-function bind(id, fn) {
-  document.getElementById(id).ontouchstart = e => { e.preventDefault(); fn(); };
+function bind(id, startFn, endFn) {
+  const btn = document.getElementById(id);
+  btn.addEventListener('touchstart', e => { e.preventDefault(); startFn(); }, {passive:false});
+  btn.addEventListener('touchend', e => { e.preventDefault(); if(endFn) endFn(); }, {passive:false});
 }
 
-bind("p1Left", ()=>p1.moving=-1);
-bind("p1Right", ()=>p1.moving=1);
-bind("p1Punch", ()=>p1.action="punch");
-bind("p1Kick", ()=>p1.action="kick");
-bind("p1BlockHigh", ()=>p1.action="blockHigh");
-bind("p1Jump", ()=>{
+bind("p1Left", () => p1.moving = -1, () => p1.moving = 0);
+bind("p1Right", () => p1.moving = 1, () => p1.moving = 0);
+bind("p1Punch", () => { if(!p1.action) p1.action = "punch" });
+bind("p1Kick", () => { if(!p1.action) p1.action = "kick" });
+bind("p1BlockHigh", () => p1.action = "blockHigh", () => p1.action = null);
+bind("p1Jump", () => {
   if (p1.onGround) {
     p1.vy = -18;
     p1.onGround = false;
