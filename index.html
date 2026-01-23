@@ -282,8 +282,9 @@ function update() {
   
   // Hyökkäykset
   if (p1.action === "punch") hit(p1, p2, 120, "blockHigh");
-  if (p1.action === "kick") hit(p1, p2, 140, "none"); // Potkua vaikeampi torjua tässä versiossa
+  if (p1.action === "kick") hit(p1, p2, 140, "none"); 
   if (p2.action === "punch") hit(p2, p1, 120, "blockHigh");
+  if (p2.action === "kick") hit(p2, p1, 140, "none"); 
 
   // Animaatioiden kesto
   if (p1.action) {
