@@ -182,18 +182,25 @@ function reset() {
 function hit(attacker, defender, range, type) {
   const d = Math.abs(attacker.x - defender.x);
 
-    // Vastustaja ilmassa → potku EI osu häneen
+  // 1. Perusohitukset: potku ei osu hyppäävään, hyppääjä ei lyö nyrkillä
   if (defender.isJumping && attacker.action === "kick") return;
-
-  // Hyppääjä → oma lyönti EI osu
   if (attacker.isJumping && attacker.action === "punch") return;
 
-  // 3. TORJUNTA-LOGIIKKA:
-  // Jos puolustajalla on "blockHigh" päällä, hän ei ota vahinkoa
   if (d < range) {
+    // 2. TORJUNTA-LOGIIKKA
     if (defender.action === "blockHigh") {
-      // Tässä kohdassa hyökkäys "kilpistyy" torjuntaan
-      return; 
+      
+      // Jos kyseessä on ISKU, torjunta toimii aina
+      if (attacker.action === "punch") return;
+
+      // Jos kyseessä on POTKU:
+      if (attacker.action === "kick") {
+        // Jos hyökkääjä on ilmassa (hyppypotku), torjunta suojaa
+        if (attacker.isJumping) return;
+        
+        // Jos molemmat ovat maassa, torjunta EI suojaa (potku osuu)
+        // Koodi jatkaa tästä eteenpäin vahingonlaskentaan
+      }
     }
 
     // Jos ei torjuttu, lasketaan vahinko
@@ -236,23 +243,28 @@ function drawPlayer(p, enemy) {
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
 
-  // Jalat
-  ctx.beginPath();
-  ctx.moveTo(p.x, p.y);
-  ctx.lineTo(p.x - 20, p.y + 50);
-  ctx.moveTo(p.x, p.y);
-  ctx.lineTo(p.x + 20, p.y + 50);
-  ctx.stroke();
+  // JALAT (Piirretään vain jos EI potkaista)
+  if (p.action !== "kick") {
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - 20, p.y + 50);
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 20, p.y + 50);
+    ctx.stroke();
+  }
 
-  // Kädet / Toiminnot
+  // KÄDET / TOIMINNOT
   ctx.beginPath();
   if (p.action === "punch") {
+    // Lyönti
     ctx.moveTo(p.x, p.y - 40);
     ctx.lineTo(p.x + dir * 80, p.y - 40);
   } else if (p.action === "kick") {
-    ctx.moveTo(p.x, p.y);
+    // POTKU-VIIVA (Jalat on piilotettu, tämä on ainoa jalkaviiva)
+    ctx.moveTo(p.x, p.y - 20); // Lähtee hieman ylempää lantiolta
     ctx.lineTo(p.x + dir * 90, p.y + 10);
   } else if (p.action === "blockHigh") {
+    // Torjunta
     ctx.moveTo(p.x, p.y - 50);
     ctx.lineTo(p.x + dir * 30, p.y - 90);
     ctx.lineTo(p.x + dir * 50, p.y - 70);
