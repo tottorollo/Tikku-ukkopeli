@@ -91,6 +91,18 @@ canvas {
   <button id="modeBtn">Yksinpeli</button>
 </div>
 
+<div id="winText"
+     style="
+       position:absolute;
+       top:45%;
+       width:100%;
+       text-align:center;
+       font-size:36px;
+       color:white;
+       display:none;
+       z-index:20;">
+</div>
+
 <canvas id="game" width="1280" height="720"></canvas>
 
 <div class="controls left">
@@ -128,6 +140,8 @@ document.addEventListener('touchend', e => {
   lastTouchEnd = now;
 }, { passive: false });
 
+let winTimer = 0;
+  
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 // Isku-osumaefektit
@@ -181,7 +195,7 @@ function ai() {
   if (multiplayer) return;
   const d = p2.x - p1.x;
   // AI liikkuu lähemmäs
-  if (Math.abs(d) > 150) p2.x += d > 0 ? -3 : 3;
+  if (Math.abs(d) > 120) p2.x += d > 0 ? -3 : 3;
   else {
     if (Math.random() < 0.05) p2.action = "punch";
     if (Math.random() < 0.03) p2.action = "kick";
@@ -268,7 +282,24 @@ function update() {
     if (p2.actionTime > 15) { p2.action = null; p2.actionTime = 0; }
   }
 
-  if (p1.hp <= 0 || p2.hp <= 0) reset();
+  if (p1.hp <= 0 || p2.hp <= 0) {
+  const winText = document.getElementById("winText");
+
+  winText.innerText =
+    p1.hp <= 0 ? "Pelaaja 2 voittaa!" : "Pelaaja 1 voittaa!";
+
+  winText.style.display = "block";
+  winTimer++;
+
+  // Näytä ilmoitus ~2 sekuntia
+  if (winTimer > 120) {
+    winText.style.display = "none";
+    winTimer = 0;
+    reset();
+  }
+
+  return; // estää lisäpäivitykset erän lopussa
+}
 }
 
 function draw() {
@@ -281,7 +312,7 @@ function draw() {
   ctx.lineTo(canvas.width, GROUND_Y + 50);
   ctx.stroke();
 
-  // 🔴 Piirrä osuma-animaatiot
+  //  Piirrä osuma-animaatiot
   for (let i = hitEffects.length - 1; i >= 0; i--) {
   const h = hitEffects[i];
   ctx.fillStyle = "rgba(255,0,0,0.6)";
