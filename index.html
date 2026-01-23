@@ -37,17 +37,6 @@ html, body {
   color: white;
 }
 
-#winText {
-  position: absolute;
-  top: 45%;
-  width: 100%;
-  text-align: center;
-  font-size: 36px;
-  color: white;
-  display: none;
-  z-index: 20;
-}
-
 canvas {
   background: #222;
   display: block;
@@ -102,8 +91,6 @@ canvas {
   <button id="modeBtn">Yksinpeli</button>
 </div>
 
-<div id="winText"></div>
-
 <canvas id="game" width="1280" height="720"></canvas>
 
 <div class="controls left">
@@ -145,7 +132,7 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 let multiplayer = false;
-const GROUND_Y = canvas.height / 2 + 50;
+const GROUND_Y = canvas.height / 2 + 50; // Asetetaan hahmot keskelle korkeutta
 
 document.getElementById("modeBtn").onclick = () => {
   multiplayer = !multiplayer;
@@ -157,81 +144,39 @@ function Player(x, color) {
   this.x = x;
   this.y = GROUND_Y;
   this.vy = 0;
-  this.onGround = true;
   this.hp = 20;
   this.color = color;
   this.action = null;
   this.actionTime = 0;
-  this.moving = 0;
+  this.moving = 0; // -1: vasen, 1: oikea, 0: paikallaan
 }
 
 const p1 = new Player(400, "lime");
 const p2 = new Player(880, "cyan");
 
-let hitEffects = [];
-let winTimer = 0;
-
 function reset() {
   p1.x = 400; p2.x = 880;
   p1.hp = p2.hp = 20;
   p1.y = p2.y = GROUND_Y;
-  p1.vy = p2.vy = 0;
-  p1.onGround = p2.onGround = true;
-  document.getElementById("winText").style.display = "none";
-  winTimer = 0;
 }
 
 function hit(attacker, defender, range, type) {
   const d = Math.abs(attacker.x - defender.x);
+  // Tarkistetaan etäisyys ja ettei puolustaja torju oikealla tavalla
   if (d < range && defender.action !== type) {
-    defender.hp -= 0.1;
-    hitEffects.push({ x: defender.x, y: defender.y - 60, t: 8 });
+    defender.hp -= 0.1; // Säädetty osumatarkkuutta
   }
 }
 
 function ai() {
   if (multiplayer) return;
   const d = p2.x - p1.x;
+  // AI liikkuu lähemmäs
   if (Math.abs(d) > 150) p2.x += d > 0 ? -3 : 3;
-  else if (Math.random() < 0.05) p2.action = "punch";
-}
-
-function update() {
-  ai();
-
-  [p1, p2].forEach(p => {
-    p.x += p.moving * 5;
-    p.x = Math.max(50, Math.min(canvas.width - 50, p.x));
-
-    if (!p.onGround) {
-      p.vy += 1;
-      p.y += p.vy;
-      if (p.y >= GROUND_Y) {
-        p.y = GROUND_Y;
-        p.vy = 0;
-        p.onGround = true;
-      }
-    }
-
-    if (p.action) {
-      p.actionTime++;
-      if (p.actionTime > 15) {
-        p.action = null;
-        p.actionTime = 0;
-      }
-    }
-  });
-
-  if (p1.action === "punch") hit(p1, p2, 120, "blockHigh");
-  if (p1.action === "kick") hit(p1, p2, 140, "none");
-  if (p2.action === "punch") hit(p2, p1, 120, "blockHigh");
-
-  if (p1.hp <= 0 || p2.hp <= 0) {
-    const txt = document.getElementById("winText");
-    txt.innerText = p1.hp <= 0 ? "Pelaaja 2 voittaa!" : "Pelaaja 1 voittaa!";
-    txt.style.display = "block";
-    winTimer++;
-    if (winTimer > 120) reset();
+  else {
+    if (Math.random() < 0.05) p2.action = "punch";
+    if (Math.random() < 0.03) p2.action = "kick";
+    if (Math.random() < 0.02) p2.action = "blockHigh";
   }
 }
 
@@ -240,15 +185,18 @@ function drawPlayer(p, enemy) {
   ctx.strokeStyle = p.color;
   ctx.lineWidth = 5;
 
+  // Pää
   ctx.beginPath();
   ctx.arc(p.x, p.y - 80, 20, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Vartalo
   ctx.beginPath();
   ctx.moveTo(p.x, p.y - 60);
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
 
+  // Jalat
   ctx.beginPath();
   ctx.moveTo(p.x, p.y);
   ctx.lineTo(p.x - 20, p.y + 50);
@@ -256,24 +204,76 @@ function drawPlayer(p, enemy) {
   ctx.lineTo(p.x + 20, p.y + 50);
   ctx.stroke();
 
+  // Kädet / Toiminnot
   ctx.beginPath();
-  ctx.moveTo(p.x, p.y - 40);
-  ctx.lineTo(p.x + dir * (p.action === "punch" ? 80 : 30), p.y - 40);
+  if (p.action === "punch") {
+    ctx.moveTo(p.x, p.y - 40);
+    ctx.lineTo(p.x + dir * 80, p.y - 40);
+  } else if (p.action === "kick") {
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + dir * 90, p.y + 10);
+  } else if (p.action === "blockHigh") {
+    ctx.moveTo(p.x, p.y - 50);
+    ctx.lineTo(p.x + dir * 30, p.y - 90);
+    ctx.lineTo(p.x + dir * 50, p.y - 70);
+  } else {
+    // Perusasento (kädet alhaalla)
+    ctx.moveTo(p.x, p.y - 40);
+    ctx.lineTo(p.x + dir * 30, p.y - 20);
+  }
   ctx.stroke();
+}
+
+function drawHP(p, x) {
+  ctx.fillStyle = "#333";
+  ctx.fillRect(x, 40, 200, 20);
+  ctx.fillStyle = p.color;
+  ctx.fillRect(x, 40, (p.hp / 20) * 200, 20);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(x, 40, 200, 20);
+}
+
+function update() {
+  ai();
+
+  // Liikkuminen
+  p1.x += p1.moving * 5;
+  if (multiplayer) p2.x += p2.moving * 5;
+
+  // Rajat
+  p1.x = Math.max(50, Math.min(canvas.width - 50, p1.x));
+  p2.x = Math.max(50, Math.min(canvas.width - 50, p2.x));
+
+  // Hyökkäykset
+  if (p1.action === "punch") hit(p1, p2, 120, "blockHigh");
+  if (p1.action === "kick") hit(p1, p2, 140, "none"); // Potkua vaikeampi torjua tässä versiossa
+  if (p2.action === "punch") hit(p2, p1, 120, "blockHigh");
+
+  // Animaatioiden kesto
+  if (p1.action) {
+    p1.actionTime++;
+    if (p1.actionTime > 15) { p1.action = null; p1.actionTime = 0; }
+  }
+  if (p2.action) {
+    p2.actionTime++;
+    if (p2.actionTime > 15) { p2.action = null; p2.actionTime = 0; }
+  }
+
+  if (p1.hp <= 0 || p2.hp <= 0) reset();
 }
 
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  // Piirrä "lattia" keskelle
+  ctx.strokeStyle = "#444";
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y + 50);
+  ctx.lineTo(canvas.width, GROUND_Y + 50);
+  ctx.stroke();
 
-  hitEffects.forEach(h => {
-    ctx.fillStyle = "rgba(255,0,0,0.6)";
-    ctx.beginPath();
-    ctx.arc(h.x, h.y, 20, 0, Math.PI * 2);
-    ctx.fill();
-    h.t--;
-  });
-  hitEffects = hitEffects.filter(h => h.t > 0);
-
+  drawHP(p1, 50);
+  drawHP(p2, canvas.width - 250);
   drawPlayer(p1, p2);
   drawPlayer(p2, p1);
 }
@@ -285,23 +285,40 @@ function loop() {
 }
 loop();
 
+// Nappien sidonta (Touch + Mouse)
 function bind(id, startFn, endFn) {
   const btn = document.getElementById(id);
-  btn.addEventListener('touchstart', e => { e.preventDefault(); startFn(); }, {passive:false});
-  btn.addEventListener('touchend', e => { e.preventDefault(); if(endFn) endFn(); }, {passive:false});
+  
+  const start = (e) => {
+    e.preventDefault();
+    startFn();
+  };
+  const end = (e) => {
+    e.preventDefault();
+    if(endFn) endFn();
+  };
+
+  btn.addEventListener('touchstart', start, {passive: false});
+  btn.addEventListener('touchend', end, {passive: false});
+  btn.addEventListener('mousedown', start);
+  btn.addEventListener('mouseup', end);
 }
 
+// Pelaaja 1 ohjaimet
 bind("p1Left", () => p1.moving = -1, () => p1.moving = 0);
 bind("p1Right", () => p1.moving = 1, () => p1.moving = 0);
 bind("p1Punch", () => { if(!p1.action) p1.action = "punch" });
 bind("p1Kick", () => { if(!p1.action) p1.action = "kick" });
 bind("p1BlockHigh", () => p1.action = "blockHigh", () => p1.action = null);
-bind("p1Jump", () => {
-  if (p1.onGround) {
-    p1.vy = -18;
-    p1.onGround = false;
-  }
-});
+bind("p1Jump", () => { /* Hyppy-logiikka voidaan lisätä tähän */ });
+
+// Pelaaja 2 ohjaimet
+bind("p2Left", () => p2.moving = -1, () => p2.moving = 0);
+bind("p2Right", () => p2.moving = 1, () => p2.moving = 0);
+bind("p2Punch", () => { if(!p2.action) p2.action = "punch" });
+bind("p2Kick", () => { if(!p2.action) p2.action = "kick" });
+bind("p2BlockHigh", () => p2.action = "blockHigh", () => p2.action = null);
+
 </script>
 </body>
 </html>
