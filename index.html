@@ -188,8 +188,15 @@ function hit(attacker, defender, range, type) {
   // Hyppääjä → oma lyönti EI osu
   if (attacker.isJumping && attacker.action === "punch") return;
 
-  // Tulee osuma ja vahinkoa
-  if (d < range && defender.action !== type) {
+  // 3. TORJUNTA-LOGIIKKA:
+  // Jos puolustajalla on "blockHigh" päällä, hän ei ota vahinkoa
+  if (d < range) {
+    if (defender.action === "blockHigh") {
+      // Tässä kohdassa hyökkäys "kilpistyy" torjuntaan
+      return; 
+    }
+
+    // Jos ei torjuttu, lasketaan vahinko
     defender.hp -= 0.1;
 
     // 🔴 Osuma-animaatio
@@ -289,11 +296,23 @@ function update() {
   // Animaatioiden kesto
   if (p1.action) {
     p1.actionTime++;
-    if (p1.actionTime > 15) { p1.action = null; p1.actionTime = 0; }
+    // Jos action on blockHigh, se kestää 60 framea (~1s), muuten 15 framea
+    let duration = (p1.action === "blockHigh") ? 60 : 15;
+    
+    if (p1.actionTime > duration) { 
+      p1.action = null; 
+      p1.actionTime = 0; 
+    }
   }
+  
   if (p2.action) {
     p2.actionTime++;
-    if (p2.actionTime > 15) { p2.action = null; p2.actionTime = 0; }
+    let duration = (p2.action === "blockHigh") ? 60 : 15;
+    
+    if (p2.actionTime > duration) { 
+      p2.action = null; 
+      p2.actionTime = 0; 
+    }
   }
 
   if (p1.hp <= 0 || p2.hp <= 0) {
